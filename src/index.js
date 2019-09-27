@@ -10,7 +10,7 @@ function expressionCalculator(expr) {
 const preporation = (expression) => {
     if (/[^\(\)+\-*\/\d\s]/.test(expression)) throw new Error(`ExpressionError: There is wrong characters in the expression [${expression}]`);
     expression = `(${expression.replace(/\s+/g, '')})`;
-    if (!check(expression.replace(/[+\-*\/\d\s]/g, ''), [['(', ')']])) throw new Error(`ExpressionError: Brackets must be paired`);
+    if (!checker(expression.replace(/[+\-*\/\d\s]/g, ''))) throw new Error(`ExpressionError: Brackets must be paired`);
     return expression;
 }
 
@@ -18,72 +18,53 @@ function calculate(expression) {
     if (/^\-?[\d\.]+(?:e[\-\+]\d*)?$/.test(expression)) {
         return +expression;
     } else {
-        const unit = /(\([\s\*\-\+\.\/\d]+\))/.exec(expression);
-        let result = division(unit[0].replace(/[\(\)]/g, ''));
-        return calculate(expression.replace(unit[0], +result));
+        const { groups: { unit } } = /(?<unit>\([\s\*\-\+\.\/\d]+\))/.exec(expression);
+        const result = calc(unit.replace(/[\(\)]/g, ''));
+        return calculate(expression.replace(unit, +result));
     }
 }
 
-function division(expression) {
-    let result = /(?:(?:[\d\.]+\-)?)(\-?[\d\.]+(?:e[\-\+]\d*)?\/\-?[\d\.]+(?:e[\-\+]\d*)?)/.exec(expression)
+const finder = (expr, type) => {
+    let regex = new RegExp(`(?:(?:[\\d\\.]\\-)?)(?<found>\\-?[\\d\\.]+(?:e[\\-\\+]\\d*)?\\${type}\\-?[\\d\\.]+(?:e[\\-\\+]\\d*)?)`);
+    const result = regex.exec(expr);
+    return result ? result.groups.found : undefined;
+}
+
+const calc = (expression, type = 0) => {
+    const types = ['/', '*', '-', '+'];
+    let result = finder(expression, types[type]);
     if (result) {
-
-        const [, first, second,] = /(?:\d+\-)?(\-?[\d\.]+(?:e[\-\+]\d*)?)\/(\-?[\d\.]+(?:e[\-\+]\d*)?)/g.exec(result[1]);
-        if (second == 0) throw new Error(`TypeError: Devision by zero.`);
-        return division(expression.replace(result[1], Number.parseFloat(first) / Number.parseFloat(second)))
+        const regex = new RegExp(`(?:(?:[\\d\\.]+\\-)?)(?<first>\\-?[\\d\\.]+(?:e[\\-\\+]\\d*)?)\\${types[type]}(?<second>\\-?[\\d\\.]+(?:e[\\-\\+]\\d*)?)`);
+        let { groups: { first, second } } = regex.exec(result);//
+        if (type === 0 && second == 0) throw new Error(`TypeError: Devision by zero.`);
+        expression = expression.replace(result, sss(Number.parseFloat(first), Number.parseFloat(second), types[type]));
+        return calc(expression.replace(/\-{2}/g, '+'), type)
     } else {
-        return multiplication(expression);
+        return type === 3 ? expression : calc(expression, ++type);
     }
 }
 
-function summation(expression) {
-    let result = /\-?[\d\.]+(?:e[\-\+]\d*)?\+\-?[\d\.]+(?:e[\-\+]\d*)?/.exec(expression)
-    if (result) {
-        const [, first, second,] = /(?:\d+\-)?(\-?[\d\.]+(?:e[\-\+]\d*)?)\+(\-?[\d\.]+(?:e[\-\+]\d*)?)/g.exec(result[0]);
-        return summation(expression.replace(result[0], Number.parseFloat(first) + Number.parseFloat(second)));
-    } else {
-        return expression;
-    }
+const sss = (a, b, type) => {
+    if (type === '/') { return a / b; }
+    if (type === '*') { return a * b; }
+    if (type === '-') { return a - b; }
+    if (type === '+') { return a + b; }
 }
 
-function multiplication(expression) {
-    let result = /(?:(?:[\d\.]+\-)?)(\-?[\d\.]+(?:e[\-\+]\d*)?\*\-?[\d\.]+(?:e[\-\+]\d*)?)/.exec(expression)
-    if (result) {
-        let { groups: { first, second } } = /(?:(?:[\d\.]+\-)?)(?<first>\-?[\d\.]+(?:e[\-\+]\d*)?)\*(?<second>\-?[\d\.]+(?:e[\-\+]\d*)?)/.exec(result[1]);//
-        return multiplication(expression.replace(result[1], Number.parseFloat(first) * Number.parseFloat(second)));
-    } else {
-        return subtraction(expression);
-    }
-}
-
-function subtraction(expression) {
-    let result = /\-?[\d\.]+(?:e[\-\+]\d*)?\-\-?[\d\.]+(?:e[\-\+]\d*)?/.exec(expression)
-    if (result) {
-        const [, first, second,] = /(?:\d+\-)?(\-?[\d\.]+(?:e[\-\+]\d*)?)\-(\-?[\d\.]+(?:e[\-\+]\d*)?)/g.exec(result[0]);
-        return subtraction(expression.replace(result[0], Number.parseFloat(first) - Number.parseFloat(second)));
-    } else {
-        return summation(expression);
-    }
-}
-
-function check(str, bracketsConfig) {
-    return checker(str, bracketsConfig);
-}
-
-function checker(str, conf, marker = false) {
-    const regex = RegExp(conf.map(([start, end]) => `${/\||(\{|\}|\[|\]|\(|\))/gm.test(start) ? '\\' + start : start}${/(\||\{|\}|\[|\]|\(|\))/gm.test(end) ? '\\' + end : end}`).join('|'));
-    const found = regex.exec(str);
+function checker(str, marker = false) {
+    const found = /\(\)/gm.exec(str);
     marker = found === null ? false : true;
 
     if (marker) {
         let array = found.input.split('');
         array.splice(found.index, found[0].length);
         str = array.join('');
-        return str.length > 0 ? checker(str, conf, marker) : marker;
+        return str.length > 0 ? checker(str, marker) : marker;
     } else {
         return marker;
     }
 }
+
 module.exports = {
     expressionCalculator
 }
